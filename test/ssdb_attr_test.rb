@@ -30,18 +30,18 @@ setup!
 class Post < ActiveRecord::Base
   include SSDB::Attr
 
-  ssdb_attr :name, :string
-  ssdb_attr :int_version, :integer
-  ssdb_attr :default_title, :string, default: "Untitled"
-  ssdb_attr :plain_touch, :string, touch: true
-  ssdb_attr :custom_touch_single_column, :string, touch: :saved_at
+  ssdb_attr :name,                          :string
+  ssdb_attr :int_value,                     :integer
+  ssdb_attr :default_title,                 :string, default: "Untitled"
+  ssdb_attr :plain_touch,                   :string, touch: true
+  ssdb_attr :custom_touch_single_column,    :string, touch: :saved_at
   ssdb_attr :custom_touch_multiple_columns, :string, touch: [:saved_at, :changed_at]
-  ssdb_attr :title, :string
-  ssdb_attr :content, :string
-  ssdb_attr :version, :integer, default: 1
+  ssdb_attr :title,                         :string
+  ssdb_attr :content,                       :string
+  ssdb_attr :version,                       :integer, default: 1
 
   before_update_ssdb_attrs :before1, :before2
-  after_update_ssdb_attrs :after1, :after2
+  after_update_ssdb_attrs  :after1,  :after2
 
   def callback_out
     @callback_out ||= []
@@ -63,10 +63,14 @@ end
 
 class SsdbAttrTest < test_framework
   def setup
+    # Clean up DB
     SSDBAttr.pool.with { |conn| conn.flushdb }
+
     ActiveRecord::Base.connection.tables.each do |table|
       ActiveRecord::Base.connection.execute "DELETE FROM #{table}"
     end
+
+    # Create object for test
     @post = Post.create(updated_at: 1.day.ago, saved_at: 1.day.ago, changed_at: 1.day.ago)
     @chat_message = ChatMessage.create(uuid: SecureRandom.uuid)
   end
@@ -79,8 +83,8 @@ class SsdbAttrTest < test_framework
   end
 
   def test_integer_attribute
-    @post.int_version = "4"
-    assert_equal 4, @post.int_version
+    @post.int_value = "4"
+    assert_equal 4, @post.int_value
   end
 
   def test_with_default_value

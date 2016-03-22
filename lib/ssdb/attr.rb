@@ -80,8 +80,8 @@ module SSDB
       #
       # @return [type] [description]
       def ssdb_attr(name, type, options={})
-        unless [:string, :integer].include?(type)
-          raise "Type not supported, only `:string` and `:integer` are supported now."
+        unless [:string, :integer, :boolean].include?(type)
+          raise "Type not supported, only `:string`, `:integer`, `:boolean` are supported now."
         end
 
         self.ssdb_attr_names << name

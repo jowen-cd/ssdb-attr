@@ -21,5 +21,9 @@ module SSDBAttr
         end
       end
     end
+
+    def disconnect!
+      # TODO: disconnect connections
+    end
   end
 end
