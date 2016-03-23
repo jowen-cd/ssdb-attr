@@ -39,6 +39,7 @@ class Post < ActiveRecord::Base
   ssdb_attr :title,                         :string
   ssdb_attr :content,                       :string
   ssdb_attr :version,                       :integer, default: 1
+  ssdb_attr :bool_val,                      :boolean, default: false
 
   before_update_ssdb_attrs :before1, :before2
   after_update_ssdb_attrs  :after1,  :after2
@@ -89,6 +90,12 @@ class SsdbAttrTest < test_framework
   def test_integer_attribute
     @post.int_value = "4"
     assert_equal 4, @post.int_value
+  end
+
+  def test_boolean_attribute
+    @post.bool_val = true
+    assert_equal true, @post.bool_val
+    assert_equal "t", SSDBAttr.pool.with { |conn| conn.get("posts:#{@post.id}:bool_val") }
   end
 
   def test_with_default_value
@@ -161,7 +168,7 @@ class SsdbAttrTest < test_framework
     default_title_key = @post.to_ssdb_attr_key(:default_title)
     version_key = @post.to_ssdb_attr_key(:version)
 
-    assert_equal 10, SSDBAttr.pool.with { |conn| conn.call_ssdb(:keys, "", "", 10000000).count }
+    assert_equal 11, SSDBAttr.pool.with { |conn| conn.call_ssdb(:keys, "", "", 10000000).count }
     assert_equal true, SSDBAttr.pool.with { |conn| conn.exists(title_key) }
     assert_equal "Untitled", SSDBAttr.pool.with { |conn| conn.get(default_title_key) }
     assert_equal "1", SSDBAttr.pool.with { |conn| conn.get(version_key) }

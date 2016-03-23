@@ -89,13 +89,12 @@ module SSDB
         self.ssdb_attr_names << name
 
         define_method(name) do
-          conversion = type == :string ? :to_s : :to_i
           value = SSDBAttr.pool.with { |conn| conn.get("#{to_ssdb_attr_key(name)}") }
 
           if value.nil?
             options[:default]
           else
-            case type
+            case type.to_sym
             when :string
               value.to_s
             when :integer
@@ -107,7 +106,14 @@ module SSDB
         end
 
         define_method("#{name}=") do |val|
-          SSDBAttr.pool.with { |conn| conn.set("#{to_ssdb_attr_key(name)}", val) }
+          save_val = case type.to_sym
+                     when :string, :integer
+                       val
+                     when :boolean
+                       val ? "t" : "f"
+                     end
+
+          SSDBAttr.pool.with { |conn| conn.set("#{to_ssdb_attr_key(name)}", save_val) }
           touch_db_column(options[:touch]) if options[:touch].present?
         end
 
