@@ -1,4 +1,5 @@
 require "redis"
+require "redis_ext"
 require "connection_pool"
 require "active_support/concern"
 require "active_support/inflector"

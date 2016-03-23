@@ -10,7 +10,7 @@ test_framework = defined?(MiniTest::Test) ? MiniTest::Test : MiniTest::Unit::Tes
 require File.expand_path(File.dirname(__FILE__) + "/../lib/ssdb/attr")
 
 def connect!
-  SSDBAttr.setup(url: 'redis://localhost:6379/15')
+  SSDBAttr.setup(url: 'redis://localhost:8888')
   ActiveRecord::Base.establish_connection adapter: 'sqlite3', database: ':memory:'
 end
 
@@ -63,8 +63,12 @@ end
 
 class SsdbAttrTest < test_framework
   def setup
-    # Clean up DB
-    SSDBAttr.pool.with { |conn| conn.flushdb }
+    # Clean up SSDB
+    SSDBAttr.pool.with do |conn|
+      conn.call_ssdb(:keys, "", "", 1000000000).each do |key|
+        conn.del(key)
+      end
+    end
 
     ActiveRecord::Base.connection.tables.each do |table|
       ActiveRecord::Base.connection.execute "DELETE FROM #{table}"
@@ -157,7 +161,7 @@ class SsdbAttrTest < test_framework
     default_title_key = @post.to_ssdb_attr_key(:default_title)
     version_key = @post.to_ssdb_attr_key(:version)
 
-    assert_equal 10, SSDBAttr.pool.with { |conn| conn.keys.count }
+    assert_equal 10, SSDBAttr.pool.with { |conn| conn.call_ssdb(:keys, "", "", 10000000).count }
     assert_equal true, SSDBAttr.pool.with { |conn| conn.exists(title_key) }
     assert_equal "Untitled", SSDBAttr.pool.with { |conn| conn.get(default_title_key) }
     assert_equal "1", SSDBAttr.pool.with { |conn| conn.get(version_key) }
