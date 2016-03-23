@@ -2,7 +2,7 @@ module SSDB
   module Attr
     extend ActiveSupport::Concern
 
-    SUPPORTED_TYPES = %i(string integer boolean)
+    SUPPORTED_TYPES = %i(string integer boolean sorted_set)
 
     included do
       define_model_callbacks :update_ssdb_attrs, only: [:before, :after]
@@ -83,13 +83,17 @@ module SSDB
       # @return [type] [description]
       def ssdb_attr(name, type, options={})
         unless SSDB::Attr::SUPPORTED_TYPES.include?(type.to_sym)
-          raise "Type #{type} not supported, only :string, :integer, :boolean are supported now."
+          raise "Type #{type} not supported, only #{SSDB::Attr::SUPPORTED_TYPES.join(",")} are supported now."
         end
 
         self.ssdb_attr_names << name
 
         define_method(name) do
-          value = SSDBAttr.pool.with { |conn| conn.get("#{to_ssdb_attr_key(name)}") }
+          if type.to_sym == :sorted_set
+            return SSDB::SortedSet.new(to_ssdb_attr_key)
+          end
+
+          value = SSDBAttr.pool.with { |conn| conn.get(to_ssdb_attr_key(name)) }
 
           if value.nil?
             options[:default]

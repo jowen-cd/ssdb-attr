@@ -4,6 +4,7 @@ require "connection_pool"
 require "active_support/concern"
 require "active_support/inflector"
 require "ssdb-attr/version"
+require "ssdb/sorted_set"
 require "ssdb/attr"
 
 module SSDBAttr
@@ -24,7 +25,9 @@ module SSDBAttr
     end
 
     def disconnect!
-      # TODO: disconnect connections
+      SSDBAttr.pool.shutdown do |conn|
+        conn.disconnect!
+      end
     end
   end
 end
