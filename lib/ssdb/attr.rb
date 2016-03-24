@@ -33,14 +33,20 @@ module SSDB
     end
 
     def init_ssdb_attrs
-      self.class.ssdb_attr_names.each do |attribute|
-        SSDBAttr.pool.with { |conn| conn.set(to_ssdb_attr_key(attribute), self.send(attribute)) }
+      self.class.ssdb_attrs.each do |attr_name, type|
+        SSDBAttr.pool.with { |conn| conn.set(to_ssdb_attr_key(attr_name), self.send(attr_name)) } if type != :sorted_set
       end
     end
 
     def clear_ssdb_attrs
-      self.class.ssdb_attr_names.each do |attribute|
-        SSDBAttr.pool.with { |conn| conn.del(to_ssdb_attr_key(attribute)) }
+      SSDBAttr.pool.with do |conn|
+        self.class.ssdb_attrs.each do |attr_name, type|
+          if type == :sorted_set
+            conn.zclear(to_ssdb_attr_key(attr_name))
+          else
+            conn.del(to_ssdb_attr_key(attr_name))
+          end
+        end
       end
     end
 
@@ -57,16 +63,26 @@ module SSDB
     end
 
     private
-
     def touch_db_column(names)
       names == true ? touch : touch(*names)
     end
 
     module ClassMethods
-      def ssdb_attr_names
-        @ssdb_attr_names ||= []
+      def ssdb_attrs
+        @ssdb_attrs ||= {}
       end
 
+      def ssdb_attr_names
+        @ssdb_attrs.keys
+      end
+
+      #
+      # Custom SSDB::Attr ID for the current object.
+      #
+      # @param [Symbol] Attribute / method to get the value acts as the SSDB::Attr ID for the current object.
+      #
+      # @return [<type>] <description>
+      #
       def ssdb_attr_id(sym)
         @ssdb_attr_id = sym
       end
@@ -86,30 +102,35 @@ module SSDB
           raise "Type #{type} not supported, only #{SSDB::Attr::SUPPORTED_TYPES.join(",")} are supported now."
         end
 
-        self.ssdb_attr_names << name
+        # self.ssdb_attr_names << name
+        self.ssdb_attrs[name.to_sym] = type.to_sym
 
         define_method(name) do
           if type.to_sym == :sorted_set
-            return SSDB::SortedSet.new(to_ssdb_attr_key)
-          end
-
-          value = SSDBAttr.pool.with { |conn| conn.get(to_ssdb_attr_key(name)) }
-
-          if value.nil?
-            options[:default]
+            # Return SSDB::SortedSet if type is sorted_set
+            SSDB::SortedSet.new(to_ssdb_attr_key(name))
           else
-            case type.to_sym
-            when :string
-              value.to_s
-            when :integer
-              value.to_i
-            when :boolean
-              value == "t" ? true : false
+            # Return value if type is other type
+            value = SSDBAttr.pool.with { |conn| conn.get(to_ssdb_attr_key(name)) }
+
+            if value.nil?
+              options[:default]
+            else
+              case type.to_sym
+              when :string
+                value.to_s
+              when :integer
+                value.to_i
+              when :boolean
+                value == "t" ? true : false
+              end
             end
           end
         end
 
         define_method("#{name}=") do |val|
+          raise "Cannot assign value to SortedSet type." if type.to_sym == :sorted_set
+
           save_val = case type.to_sym
                      when :string, :integer
                        val

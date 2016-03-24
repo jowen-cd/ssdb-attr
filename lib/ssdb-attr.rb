@@ -1,10 +1,12 @@
 require "redis"
 require "redis_ext"
 require "connection_pool"
+require "active_support"
+require "active_support/core_ext"
 require "active_support/concern"
 require "active_support/inflector"
 require "ssdb-attr/version"
-require "ssdb/sorted_set"
+require "ssdb/objects/sorted_set"
 require "ssdb/attr"
 
 module SSDBAttr

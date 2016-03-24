@@ -40,6 +40,7 @@ class Post < ActiveRecord::Base
   ssdb_attr :content,                       :string
   ssdb_attr :version,                       :integer, default: 1
   ssdb_attr :bool_val,                      :boolean, default: false
+  ssdb_attr :test_set,                      :sorted_set
 
   before_update_ssdb_attrs :before1, :before2
   after_update_ssdb_attrs  :after1,  :after2
@@ -65,7 +66,7 @@ end
 class SsdbAttrTest < test_framework
   def setup
     # Clean up SSDB
-    SSDBAttr.pool.with do |conn|
+    SDBAttr.pool.with do |conn|
       conn.call_ssdb(:keys, "", "", 1000000000).each do |key|
         conn.del(key)
       end
@@ -78,6 +79,30 @@ class SsdbAttrTest < test_framework
     # Create object for test
     @post = Post.create(updated_at: 1.day.ago, saved_at: 1.day.ago, changed_at: 1.day.ago)
     @chat_message = ChatMessage.create(uuid: SecureRandom.uuid)
+  end
+
+  def test_clear_ssdb_attrs
+    @post = Post.create(updated_at: 1.day.ago, saved_at: 1.day.ago, changed_at: 1.day.ago)
+
+    @post.clear_ssdb_attrs
+
+    SSDBAttr.pool.with do |conn|
+      # Values
+      assert_equal nil, conn.get("posts:#{@post.id}:bool_val")
+      assert_equal nil, conn.get("posts:#{@post.id}:name")
+      assert_equal nil, conn.get("posts:#{@post.id}:int_value")
+      assert_equal nil, conn.get("posts:#{@post.id}:default_title")
+      assert_equal nil, conn.get("posts:#{@post.id}:plain_touch")
+      assert_equal nil, conn.get("posts:#{@post.id}:custom_touch_single_column")
+      assert_equal nil, conn.get("posts:#{@post.id}:custom_touch_multiple_columns")
+      assert_equal nil, conn.get("posts:#{@post.id}:title")
+      assert_equal nil, conn.get("posts:#{@post.id}:content")
+      assert_equal nil, conn.get("posts:#{@post.id}:version")
+      assert_equal nil, conn.get("posts:#{@post.id}:bool_val")
+
+      # SortedSet
+      assert_equal 0,   conn.zcard("posts:#{@post.id}:test_set")
+    end
   end
 
   def test_respond_to_methods
