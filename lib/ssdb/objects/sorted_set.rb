@@ -40,6 +40,16 @@ module SSDB
         call(:zincr, @key, name, delta)
       end
 
+      def rebuild_with(array)
+        SSDBAttr.pool.with do |conn|
+          conn.zclear(@key)
+
+          array.each_with_index do |item, index|
+            conn.call_ssdb(:zset, @key, item, index)
+          end
+        end
+      end
+
       def call(command, *args)
         SSDBAttr.pool.with do |conn|
           conn.call_ssdb(command, *args)

@@ -66,7 +66,7 @@ end
 class SsdbAttrTest < test_framework
   def setup
     # Clean up SSDB
-    SDBAttr.pool.with do |conn|
+    SSDBAttr.pool.with do |conn|
       conn.call_ssdb(:keys, "", "", 1000000000).each do |key|
         conn.del(key)
       end

@@ -75,4 +75,23 @@ class SortedSetTest < test_framework
     ss.incr(:bar, 2)
     assert_equal 4, SSDBAttr.pool.with { |conn| conn.zscore(:foo, :bar) }
   end
+
+  def test_rebuild_with_of_sorted_set
+    ss = SSDB::Objects::SortedSet.new(:foo)
+
+    ss.add(:bar, 1)
+
+    SSDBAttr.pool.with do |conn|
+      assert_equal 1, conn.zcard(:foo)
+
+      ss.rebuild_with(['a', 'b', 'c', 'd'])
+
+      assert_equal 4, conn.zcard(:foo)
+
+      assert_equal 0, conn.zscore(:foo, :a)
+      assert_equal 1, conn.zscore(:foo, :b)
+      assert_equal 2, conn.zscore(:foo, :c)
+      assert_equal 3, conn.zscore(:foo, :d)
+    end
+  end
 end
