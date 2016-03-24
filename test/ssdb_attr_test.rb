@@ -105,6 +105,10 @@ class SsdbAttrTest < test_framework
     end
   end
 
+  def test_ssdb_attr_keyvalue_names
+    assert_equal %i(name int_value default_title plain_touch custom_touch_single_column custom_touch_multiple_columns title content version bool_val).sort, Post.ssdb_attr_keyvalue_names.sort
+  end
+
   def test_respond_to_methods
     assert_equal true, @post.respond_to?(:name)
     assert_equal true, @post.respond_to?(:name=)

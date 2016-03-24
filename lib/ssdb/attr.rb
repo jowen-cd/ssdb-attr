@@ -11,9 +11,9 @@ module SSDB
     end
 
     def update_ssdb_attrs(attributes)
-      # Determine what attrs are requested to be updated
+      # Determine what attrs are valid to be updated
       attributes = attributes.symbolize_keys
-      attr_names = attributes.keys & self.class.ssdb_attr_names
+      attr_names = attributes.keys & self.class.ssdb_attr_keyvalue_names
 
       # Determine dirty fields
       attr_names.each do |name|
@@ -77,6 +77,16 @@ module SSDB
       end
 
       #
+      # Return an array of attr names which is of KeyValue
+      #
+      #
+      # @return [Array] Array of ssdb:attr names
+      #
+      def ssdb_attr_keyvalue_names
+        @ssdb_attrs.reject { |_, type| type == :sorted_set }.keys
+      end
+
+      #
       # Custom SSDB::Attr ID for the current object.
       #
       # @param [Symbol] Attribute / method to get the value acts as the SSDB::Attr ID for the current object.
@@ -108,7 +118,7 @@ module SSDB
         define_method(name) do
           if type.to_sym == :sorted_set
             # Return SSDB::SortedSet if type is sorted_set
-            SSDB::SortedSet.new(to_ssdb_attr_key(name))
+            SSDB::Objects::SortedSet.new(to_ssdb_attr_key(name))
           else
             # Return value if type is other type
             value = SSDBAttr.pool.with { |conn| conn.get(to_ssdb_attr_key(name)) }
