@@ -1,4 +1,4 @@
-# SSDB::Attr - Intuitive SSDB attributes that works perfectly with ActiveModel.
+# SSDB::Attr - Intuitively manage attributes of your model in SSDB.
 
 
 This gem provides a Rubyish interface to save values to SSDB in your `ActiveModel` object.
@@ -213,3 +213,6 @@ str_val changed in after_callback
  => true # currently this method always returns true.
 ```
 
+### Disconnecting
+
+You could call `SSDBAttr.disconnect!` to close all the connections that `SSDBAttr` holds.
