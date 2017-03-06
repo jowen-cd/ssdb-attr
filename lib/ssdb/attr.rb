@@ -17,6 +17,13 @@ module SSDB
         @ssdb_attr_id_field ||= (id || :id)
       end
 
+      #
+      # 指定当前 Class 使用哪个 pool
+      #
+      # @param [String/Symbol] conn_name
+      #
+      # @return [String/Symbol]
+      #
       def ssdb_attr_conn(conn_name)
         @ssdb_attr_conn_name = conn_name
       end
