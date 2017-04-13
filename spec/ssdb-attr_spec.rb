@@ -3,29 +3,71 @@ require "ssdb-attr"
 
 describe SSDBAttr do
 
-  describe "#pool" do
-    it "should fetch the named pool if a connection name is passed" do
-      options = { :url => "redis://localhost:8888" }
+  describe ".pool" do
+    context "with only one pool" do
+      it "should set it up as default pool if no name specified" do
+        options = { :url => "redis://localhost:8888" }
 
-      SSDBAttr.setup(options)
+        SSDBAttr.setup(options)
+        expect(SSDBAttr.default_pool_name).to eq(:default)
+        expect(SSDBAttr.pools.keys).to match_array([:default])
 
-      pool_dbl = double(ConnectionPool)
+        pool_dbl = double(ConnectionPool)
+        expect(SSDBAttr.pools).to receive(:[]).with(:default).and_return(pool_dbl)
+        expect(SSDBAttr.default_pool).to eq(pool_dbl)
+      end
 
-      expect(SSDBAttr.pools).to receive(:[]).with(:foo).and_return(pool_dbl)
-      expect(SSDBAttr.pool(:foo)).to eq(pool_dbl)
+      it "should fetch the named pool if a connection name is passed" do
+        options = { :url => "redis://localhost:8888", :name => "foobar" }
+
+        SSDBAttr.setup(options)
+        expect(SSDBAttr.default_pool_name).to eq(:foobar)
+        expect(SSDBAttr.pools.keys).to match_array([:foobar])
+
+        pool_dbl = double(ConnectionPool)
+
+        expect(SSDBAttr.pools).to receive(:[]).with(:foobar).and_return(pool_dbl)
+        expect(SSDBAttr.pool(:foobar)).to eq(pool_dbl)
+
+        expect(SSDBAttr.pools).to receive(:[]).with(:foobar).and_return(pool_dbl)
+        expect(SSDBAttr.default_pool).to eq(pool_dbl)
+      end
     end
 
-    it "should return the default pool if connection name of nil is passed" do
-      options = { :url => "redis://localhost:8888" }
+    context "with more than one pools" do
+      it "should set it up as default pool correctly" do
+        options = [
+          { :url => "redis://localhost:8888", :name => :bar, :default => true },
+          { :url => "redis://localhost:8889", :name => "foo" }
+        ]
 
-      SSDBAttr.setup(options)
+        SSDBAttr.setup(options)
+        expect(SSDBAttr.default_pool_name).to eq(:bar)
+        expect(SSDBAttr.pools.keys).to match_array([:bar, :foo])
 
-      pool_dbl = double(ConnectionPool)
+        pool_dbl1 = double(ConnectionPool)
+        pool_dbl2 = double(ConnectionPool)
 
-      SSDBAttr.default_pool_name = :default_foo
+        expect(SSDBAttr.pools).to receive(:[]).with(:bar).and_return(pool_dbl1)
+        expect(SSDBAttr.pools).to receive(:[]).with(:foo).and_return(pool_dbl2)
 
-      expect(SSDBAttr.pools).to receive(:[]).with(:default_foo).and_return(pool_dbl)
-      expect(SSDBAttr.pool).to eq(pool_dbl)
+        expect(SSDBAttr.default_pool).to eq(pool_dbl1)
+        expect(SSDBAttr.pool(:foo)).to eq(pool_dbl2)
+      end
+
+      it "should raise error if no default pool specified" do
+        options = [{ :url => "redis://localhost:8888", :name => "foobar" }]
+        expect { SSDBAttr.setup(options) }.to raise_error(RuntimeError)
+      end
+
+      it "should raise error if more than one pool named as default" do
+        options = [
+          { :url => "redis://localhost:8888", :name => :bar, :default => true },
+          { :url => "redis://localhost:8889", :name => "foo", :default => true }
+        ]
+
+        expect { SSDBAttr.setup(options) }.to raise_error(RuntimeError)
+      end
     end
   end
 

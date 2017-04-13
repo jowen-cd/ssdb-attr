@@ -35,7 +35,7 @@ module SSDBAttr
     # @return [void]
     #
     def setup(configuration)
-      raise "SSDB-Attr could not initialize!" if configuration.nil?
+      raise "SSDBAttr: could not initialize!" if configuration.nil?
 
       SSDBAttr.pools = {}
 
@@ -46,24 +46,32 @@ module SSDBAttr
         pool_name = conf[:name] || :default
 
         SSDBAttr.pools[pool_name.to_sym] = create_pool(configuration)
-        SSDBAttr.default_pool_name = pool_name
+        SSDBAttr.default_pool_name = pool_name.to_sym
       end
 
       if configuration.is_a?(Array)
+        # Check how many default pools specified in the configuration
+        default_counts = 0
+        configuration.each do |c|
+          conf = c.symbolize_keys
+          default_counts = default_counts + 1 if conf[:default]
+        end
+
+        raise "SSDBAttr: More than one default pool specified!" if default_counts > 1
+        raise "SSDBAttr: No default pool specified!" if default_counts == 0
+
         # Multiple connection pools
         configuration.each do |c|
           conf = c.symbolize_keys
 
           pool_name = conf[:name]
 
-          raise "ssdb-attr: Pool name not specified!" if pool_name.blank?
+          raise "SSDBAttr: Pool name not specified!" if pool_name.blank?
 
           SSDBAttr.pools[pool_name.to_sym] = create_pool(conf)
-          SSDBAttr.default_pool_name = pool_name if conf[:default]
+          SSDBAttr.default_pool_name = pool_name.to_sym if conf[:default]
         end
       end
-
-      raise "ssdb-attr: No default pool in configuration!" if SSDBAttr.pool.nil?
     end
 
     def pool(name=nil)
