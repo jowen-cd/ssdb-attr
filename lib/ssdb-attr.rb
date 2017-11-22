@@ -6,6 +6,7 @@ require "active_support/concern"
 require "active_support/inflector"
 require "ssdb-attr/version"
 require "ssdb/attr"
+require "ssdb/type"
 
 module SSDBAttr
   class << self
@@ -121,7 +122,7 @@ module SSDBAttr
 
           value =
             if (raw_value = key_values[object.ssdb_attr_key(name)]).present?
-              object.typecaster(raw_value, object.class.ssdb_attr_definition[name])
+              object.decode_ssdb_attr(raw_value, object.class.ssdb_attr_definition[name])
             else
               object.public_send("#{name}_default_value")
             end

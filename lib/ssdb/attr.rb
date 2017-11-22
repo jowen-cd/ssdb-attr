@@ -5,12 +5,14 @@ module SSDB
     included do
       instance_variable_set(:@ssdb_attr_definition, {})
 
+      #before_validation :check_ssdb_json_changes
       after_create :save_ssdb_attrs
       after_update :save_ssdb_attrs
       after_commit :clear_ssdb_attrs, on: :destroy
     end
 
     module ClassMethods
+      SUPPORTED_SSDBATTR_TYPES = %i[string integer json]
       attr_reader :ssdb_attr_definition
       attr_reader :ssdb_attr_id_field
       attr_reader :ssdb_attr_pool_name
@@ -52,38 +54,52 @@ module SSDB
       # @return [void]
       #
       def ssdb_attr(name, type, options = {})
-        unless %i(string integer).include?(type)
-          raise "Type not supported, only `:string` and `:integer` are supported now."
+        unless SUPPORTED_SSDBATTR_TYPES.include?(type.to_sym)
+          raise "Type: #{type} not supported, only supported #{SUPPORTED_SSDBATTR_TYPES} now."
         end
 
         @ssdb_attr_definition[name.to_s] = type.to_s
 
         define_method(name) do
-          instance_variable_get("@#{name}") || begin
-            val = ssdb_attr_pool.with { |conn| conn.get(ssdb_attr_key(name)) } || options[:default]
-            instance_variable_set("@#{name}", typecaster(val, type))
+          if instance_variable_defined?("@#{name}")
+            instance_variable_get("@#{name}")
+          else
+            ssdb_val = ssdb_attr_pool.with { |conn| conn.get(ssdb_attr_key(name)) }
+            cached_ssdb_attr_old_value(name, ssdb_val)
+            instance_variable_set("@#{name}", decode_ssdb_attr(ssdb_val || options[:default], type))
           end
         end
 
         define_method("#{name}=") do |val|
-          send("#{name}_will_change!") unless typecaster(val, type) == send(name)
-          instance_variable_set("@#{name}", val)
+          decode_val = decode_ssdb_attr(val, type)
+          send("#{name}_will_change!") unless decode_val == send(name)
+          instance_variable_set("@#{name}", decode_val)
         end
 
         define_method("#{name}_default_value") do
-          typecaster(options[:default], type)
+          decode_ssdb_attr(options[:default], type)
         end
 
-        define_method("#{name}_was")          { attribute_was(name) }
+        define_method("#{name}_was") { changed_ssdb_attrs[name] }
 
-        define_method("#{name}_change")       { attribute_change(name) }
+        define_method("#{name}_change") do
+          if __send__("#{name}_changed?")
+            [changed_ssdb_attrs[name], __send__(name)]
+          end
+        end
 
-        define_method("#{name}_changed?")     { attribute_changed?(name) }
+        define_method("#{name}_changed?") { changed_ssdb_attrs.include?(name) }
 
-        define_method("restore_#{name}!")     { restore_attribute!(name) }
+        define_method("restore_#{name}!") do
+          if __send__("#{name}_changed?")
+            __send__("#{name}=", changed_ssdb_attrs[name])
+            # 清除 changed_attributes 相关数值
+            attributes_changed_by_setter.except!(name)
+          end
+        end
 
+        # changed_attributes 里会有相关数值
         define_method("#{name}_will_change!") { attribute_will_change!(name) }
-
       end
     end
 
@@ -113,7 +129,7 @@ module SSDB
       end
 
       fields.each_with_index do |attr, index|
-        value = typecaster(values[index], self.class.ssdb_attr_definition[attr])
+        value = decode_ssdb_attr(values[index], self.class.ssdb_attr_definition[attr])
         instance_variable_set("@#{attr}", value)
       end
     end
@@ -137,16 +153,40 @@ module SSDB
     #
     # @return [Any]
     #
-    def typecaster(val, type)
+    def decode_ssdb_attr(val, type)
       case type.to_sym
       when :string  then val.to_s
       when :integer then val.to_i
+      when :json then
+        SSDB::Type::JSON.decode(val)
       else
-        raise "Typecaster: i don't know this type: #{type}."
+        raise "decode_ssdb_attr: i don't know this type: #{type}."
       end
     end
 
+    def encode_ssdb_attr(val, type)
+      case type.to_sym
+      when :string  then val.to_s
+      when :integer then val.to_i
+      when :json then
+        SSDB::Type::JSON.new(val).encode
+      else
+        raise "encode_ssdb_attr: i don't know this type: #{type}."
+      end
+    end
+
+    # changes with ssdb_attr changes
+    #
+    # @return [Hash]
+    def changes_with_ssdb
+      changes.merge(ssdb_changes)
+    end
+
     private
+
+    def ssdb_attr_old_values
+      @ssdb_attr_old_values ||= HashWithIndifferentAccess.new
+    end
 
     #
     # Return the ConnectionPool used by current Class.
@@ -181,13 +221,32 @@ module SSDB
     # @return [void]
     #
     def save_ssdb_attrs
-      params = (changes.keys & self.class.ssdb_attr_names).map do |attr|
-        ["#{ssdb_attr_key(attr)}", changes[attr][1]]
+      update_params = []
+      del_keys = []
+      ssdb_changes.each do |attr, values|
+        _, val = values
+        val = encode_ssdb_attr(val, self.class.ssdb_attr_definition[attr])
+        if val.nil?
+          del_keys.push "#{ssdb_attr_key(attr)}"
+        else
+          update_params.push ["#{ssdb_attr_key(attr)}", val]
+        end
+        cached_ssdb_attr_old_value(attr, val, true)
       end
 
       ssdb_attr_pool.with do |conn|
-        conn.mset(*params.flatten)
-      end if params.length > 0
+        conn.mset(*update_params.flatten) if update_params.length > 0
+        conn.del(*del_keys) if del_keys.length > 0
+      end 
+    end
+
+    def cached_ssdb_attr_old_value(name, value, force = false)
+      value = value.duplicable? ? value.dup : value
+      if force
+        ssdb_attr_old_values[name.to_s] = value
+      else
+        ssdb_attr_old_values[name.to_s] ||= value
+      end
     end
 
     #
@@ -199,11 +258,30 @@ module SSDB
     # @return [void]
     #
     def reload_ssdb_attrs
-      keys = self.class.ssdb_attr_names.map { |name| ssdb_attr_key(name) }
-      values = ssdb_attr_pool.with { |conn| conn.mget(keys) }
+      load_ssdb_attrs(*self.class.ssdb_attr_names)
+    end
 
-      self.class.ssdb_attr_names.each_with_index do |attr, index|
-        instance_variable_set("@#{attr}", typecaster(values[index], self.class.ssdb_attr_definition[attr]))
+    # ssdb_changes (like activerecord changes)
+    #
+    # @return [Hash]
+    def ssdb_changes
+      changed_ssdb_attrs.each_with_object({}.with_indifferent_access) do |info, obj|
+        attr_name, old_val = info
+        obj[attr_name] = [old_val, __send__(attr_name)]
+      end
+    end
+
+    # changed_ssdb_attr (like activerecord changed_attributes)
+    #
+    # @return [Hash]
+    def changed_ssdb_attrs
+      ssdb_attr_old_values.each_with_object({}.with_indifferent_access) do |info, obj|
+        attr_name, original_val = info
+        type = self.class.ssdb_attr_definition[attr_name]
+        old_val = decode_ssdb_attr(original_val, type)
+        if old_val != __send__(attr_name)
+          obj[attr_name] = old_val
+        end
       end
     end
   end

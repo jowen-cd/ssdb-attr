@@ -49,6 +49,9 @@ class Post < ActiveRecord::Base
   ssdb_attr :version, :integer, default: 1
   ssdb_attr :default_version, :integer, :default => 100
   ssdb_attr :field_with_validation, :string
+  ssdb_attr :json_array, :json, :default => []
+  ssdb_attr :json_hash, :json, :default => {}
+  ssdb_attr :json_ssdb, :json
 
   validate :validate_field
 

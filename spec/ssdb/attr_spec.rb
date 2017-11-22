@@ -8,7 +8,6 @@ describe SSDB::Attr do
     describe "@ssdb_attr_definition" do
       it "should set `@ssdb_attr_definition` correctly"  do
         ssdb_attr_definition = Post.instance_variable_get(:@ssdb_attr_definition)
-
         expect(ssdb_attr_definition["name"]).to eq("string")
         expect(ssdb_attr_definition["int_version"]).to eq("integer")
         expect(ssdb_attr_definition["default_title"]).to eq("string")
@@ -142,6 +141,29 @@ describe SSDB::Attr do
 
       it "default value with `:default` option" do
         expect(post.default_title).to eq("Untitled")
+      end
+    end
+
+    context "type: :json" do
+      it "default value" do
+        expect(post.json_ssdb).to be_nil
+        expect(post.json_array).to eq([])
+        expect(post.json_hash).to eq({})
+      end
+
+      it "decode to correct data" do
+        post.json_ssdb = [1, 2]
+        expect(post.json_ssdb).to eq([1, 2])
+        post.json_ssdb = nil
+        expect(post.json_ssdb).to be_nil
+        post.json_ssdb = { :a => 1 }
+        expect(post.json_ssdb).to eq( { :a => 1 } )
+
+        post.json_ssdb = 123
+        expect(post.json_ssdb).to be_nil
+        post.json_ssdb = { :a => 1 }
+        post.json_ssdb = "123"
+        expect(post.json_ssdb).to be_nil
       end
     end
 

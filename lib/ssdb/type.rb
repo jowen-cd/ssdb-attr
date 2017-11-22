@@ -1,0 +1,1 @@
+require "ssdb/type/json"
