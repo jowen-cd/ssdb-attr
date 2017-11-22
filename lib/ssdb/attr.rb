@@ -5,7 +5,6 @@ module SSDB
     included do
       instance_variable_set(:@ssdb_attr_definition, {})
 
-      #before_validation :check_ssdb_json_changes
       after_create :save_ssdb_attrs
       after_update :save_ssdb_attrs
       after_commit :clear_ssdb_attrs, on: :destroy
