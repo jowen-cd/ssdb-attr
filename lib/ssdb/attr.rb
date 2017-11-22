@@ -5,8 +5,10 @@ module SSDB
     included do
       instance_variable_set(:@ssdb_attr_definition, {})
 
+      before_update :reset_updated_timestamp
       after_create :save_ssdb_attrs
       after_update :save_ssdb_attrs
+      after_commit :reload_ssdb_attr_old_values
       after_commit :clear_ssdb_attrs, on: :destroy
     end
 
@@ -230,7 +232,6 @@ module SSDB
         else
           update_params.push ["#{ssdb_attr_key(attr)}", val]
         end
-        cached_ssdb_attr_old_value(attr, val, true)
       end
 
       ssdb_attr_pool.with do |conn|
@@ -239,12 +240,31 @@ module SSDB
       end 
     end
 
+    # reset ssdb_attr_old_values
+    #
+    # @return [void]
+    def reload_ssdb_attr_old_values
+      ssdb_changes.each do |attr, values|
+        _, val = values
+        val = encode_ssdb_attr(val, self.class.ssdb_attr_definition[attr])
+        cached_ssdb_attr_old_value(attr, val, true)
+      end
+    end
+
     def cached_ssdb_attr_old_value(name, value, force = false)
       value = value.duplicable? ? value.dup : value
       if force
         ssdb_attr_old_values[name.to_s] = value
       else
         ssdb_attr_old_values[name.to_s] ||= value
+      end
+    end
+
+    def reset_updated_timestamp
+      if changes.blank? && ssdb_changes.present?
+        timestamp_attributes_for_update_in_model.each do |column|
+          write_attribute(column, current_time_from_proper_timezone)
+        end
       end
     end
 
